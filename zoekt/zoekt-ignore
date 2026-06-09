@@ -1,0 +1,33 @@
+# Shared ignore patterns for zoekt-git-index.
+# Format: same as .sourcegraph/ignore (glob patterns, one per line).
+# Patterns without glob characters get an implicit trailing **.
+
+node_modules/
+.npm/
+build/
+out/
+dist/
+.gradle/
+.nx/
+vendor/
+__pycache__/
+*.lock
+package-lock.json
+npm-shrinkwrap.json
+*.min.js
+*.min.css
+*.map
+*.woff
+*.woff2
+*.ttf
+*.eot
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.svg
+*.pdf
+*.jar
+*.class
+*.pyc

@@ -1,0 +1,107 @@
+name: grepsense
+
+# The full grepsense stack. Point GREPSENSE_TARGET at the code you want indexed
+# (see .env.example), then `docker compose up -d`. The MCP server is published on
+# ${GREPSENSE_HTTP_PORT} — register that URL with your agent.
+
+services:
+  # ── Lexical search: Zoekt trigram index + webserver ──────────────────────
+  zoekt-indexer:
+    image: ${ZOEKT_IMAGE:-ghcr.io/alaiba/grepsense-zoekt:latest}
+    build:
+      context: ./zoekt
+    environment:
+      - GREPSENSE_ROOT=/code
+      - ZOEKT_INDEX_DIR=/data/index
+      - REINDEX_INTERVAL=${REINDEX_INTERVAL:-300}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        bash /opt/grepsense/zoekt/index-repos.sh
+        echo "=== grepsense: Zoekt re-index loop every $${REINDEX_INTERVAL:-300}s ==="
+        while true; do
+          sleep "$${REINDEX_INTERVAL:-300}"
+          bash /opt/grepsense/zoekt/index-repos.sh
+        done
+    volumes:
+      - zoekt-index:/data/index
+      - ${GREPSENSE_TARGET:-./}:/code:ro
+      - ./zoekt:/opt/grepsense/zoekt:ro
+    restart: unless-stopped
+
+  zoekt-web:
+    image: ${ZOEKT_IMAGE:-ghcr.io/alaiba/grepsense-zoekt:latest}
+    build:
+      context: ./zoekt
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - exec zoekt-webserver -index /data/index -listen ":6070"
+    volumes:
+      - zoekt-index:/data/index:ro
+    depends_on:
+      zoekt-indexer:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── Semantic search: ChromaDB + the grepsense embedder ───────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+  embedder:
+    image: ${GREPSENSE_IMAGE:-ghcr.io/alaiba/grepsense:latest}
+    build:
+      context: .
+    environment:
+      - GREPSENSE_ROOT=/code
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - GREPSENSE_COLLECTION=${GREPSENSE_COLLECTION:-grepsense}
+      - EMBED_INTERVAL=${EMBED_INTERVAL:-3600}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until curl -sf http://chromadb:8000/api/v2/heartbeat >/dev/null; do
+          echo "grepsense: waiting for chromadb..."; sleep 2
+        done
+        grepsense embed --root /code || true
+        echo "=== grepsense: semantic re-embed loop every $${EMBED_INTERVAL:-3600}s ==="
+        while true; do
+          sleep "$${EMBED_INTERVAL:-3600}"
+          grepsense embed --root /code || true
+        done
+    volumes:
+      - ${GREPSENSE_TARGET:-./}:/code:ro
+    depends_on:
+      chromadb:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── MCP server (streamable-HTTP) — the endpoint agents connect to ────────
+  mcp:
+    image: ${GREPSENSE_IMAGE:-ghcr.io/alaiba/grepsense:latest}
+    build:
+      context: .
+    command: ["serve", "--transport", "http", "--host", "0.0.0.0", "--port", "8765"]
+    environment:
+      - ZOEKT_URL=http://zoekt-web:6070
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - GREPSENSE_COLLECTION=${GREPSENSE_COLLECTION:-grepsense}
+    ports:
+      - "${GREPSENSE_HTTP_PORT:-8765}:8765"
+    depends_on:
+      - zoekt-web
+      - chromadb
+    restart: unless-stopped
+
+volumes:
+  zoekt-index:
+    name: ${ZOEKT_VOLUME:-grepsense-zoekt-index}
+  chroma-data:
+    name: ${CHROMADB_VOLUME:-grepsense-chroma-data}
