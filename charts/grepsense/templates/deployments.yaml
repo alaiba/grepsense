@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "grepsense.fullname" . }}-chromadb
   labels:
     {{- include "grepsense.labels" . | nindent 4 }}
     app.kubernetes.io/component: chromadb
 spec:
+  serviceName: {{ include "grepsense.fullname" . }}-chromadb
   replicas: {{ .Values.chromadb.replicas }}
   selector:
     matchLabels:
@@ -44,14 +45,22 @@ spec:
           volumeMounts:
             - name: chroma-data
               mountPath: /chroma/chroma
+      {{- if not .Values.chromadb.persistence.enabled }}
       volumes:
         - name: chroma-data
-          {{- if .Values.chromadb.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ include "grepsense.fullname" . }}-chroma-data
-          {{- else }}
           emptyDir: {}
-          {{- end }}
+      {{- end }}
+  {{- if .Values.chromadb.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: chroma-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.chromadb.persistence.size | quote }}
+        storageClassName: {{ .Values.chromadb.persistence.storageClassName | quote }}
+  {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -88,9 +97,12 @@ spec:
               port: http
             {{- toYaml .Values.zoektWeb.probes.liveness | nindent 12 }}
           readinessProbe:
-            httpGet:
-              path: /search?q=TODO&num=1&format=json
-              port: http
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  curl -sf "http://127.0.0.1:6070/search?q=TODO&num=1&format=json" >/dev/null
             {{- toYaml .Values.zoektWeb.probes.readiness | nindent 12 }}
           {{- end }}
           volumeMounts:
@@ -196,7 +208,11 @@ spec:
           {{- if and .Values.probes.enabled .Values.zoektIndexer.probes.enabled }}
           livenessProbe:
             exec:
-              command: ["/bin/sh", "-c", "test -d /proc/1"]
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  ps -ef | grep -E 'sh -c.*[b]ash /opt/grepsense/zoekt/index-repos.sh|[b]ash /opt/grepsense/zoekt/index-repos.sh' >/dev/null
             {{- toYaml .Values.zoektIndexer.probes.liveness | nindent 12 }}
           {{- end }}
           volumeMounts:
@@ -274,7 +290,11 @@ spec:
           {{- if and .Values.probes.enabled .Values.embedder.probes.enabled }}
           livenessProbe:
             exec:
-              command: ["/bin/sh", "-c", "test -d /proc/1"]
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  ps -ef | grep -E 'sh -c.*[g]repsense embed --root /code|[g]repsense embed --root /code' >/dev/null
             {{- toYaml .Values.embedder.probes.liveness | nindent 12 }}
           {{- end }}
           volumeMounts:

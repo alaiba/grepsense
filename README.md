@@ -42,7 +42,7 @@ claude mcp add --transport http grepsense http://localhost:8765/mcp
 The same running stack can serve many clients — run it on a shared host and point
 everyone's agent at it. The MCP server only needs to reach Zoekt + ChromaDB; only
 the indexer/embedder mount your source.
-
+For Kubernetes/Helm deployments, the chart under `charts/grepsense` enables health probes by default via `probes.enabled`, and exposes component-level overrides for `mcp.probes`, `chromadb.probes`, `zoektWeb.probes`, `zoektIndexer.probes`, and `embedder.probes`.
 MCP exposes lightweight HTTP health probes on the same port:
 
 - `GET /healthz` returns 200 when the MCP process is alive.

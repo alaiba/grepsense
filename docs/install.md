@@ -38,8 +38,9 @@ curl -s localhost:${GREPSENSE_HTTP_PORT:-8765}/readyz                    # MCP d
 
 `/healthz` is intentionally shallow: it returns 200 when the MCP HTTP process is
 alive and does not check backends. `/readyz` returns 200 only when MCP can reach
-Zoekt via `ZOEKT_URL` and ChromaDB via `CHROMADB_HOST` / `CHROMADB_PORT`; when a
-dependency is down it returns a non-200 response with JSON dependency details.
+Zoekt via `ZOEKT_URL` and ChromaDB via `CHROMADB_HOST` / `CHROMADB_PORT`; the
+Zoekt check uses a minimal search query to verify the search endpoint is usable.
+When a dependency is down it returns a non-200 response with JSON dependency details.
 
 ### Register with your agent (HTTP — works for all agents)
 

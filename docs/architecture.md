@@ -45,8 +45,8 @@ returning a clear error if a backend is down. Configuration is env-driven
 
 For HTTP deployments, MCP also exposes `GET /healthz` and `GET /readyz`.
 `/healthz` is a process liveness check only. `/readyz` checks dependency
-reachability against `ZOEKT_URL` and ChromaDB's `/api/v2/heartbeat`, returning
-JSON details and a non-200 status when either dependency is unavailable.
+reachability against Zoekt's search endpoint and ChromaDB's `/api/v2/heartbeat`,
+returning JSON details and a non-200 status when either dependency is unavailable.
 
 ## Repository discovery
 

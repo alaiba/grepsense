@@ -5,6 +5,7 @@ images:
   zoekt: ghcr.io/alaiba/grepsense-zoekt:latest
   chromadb: chromadb/chroma:latest
 
+# Global probe enablement. Disable all probes with probes.enabled=false.
 probes:
   enabled: true
 

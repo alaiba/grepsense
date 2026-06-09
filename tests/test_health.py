@@ -32,10 +32,10 @@ def test_healthz_returns_ok() -> None:
 
 
 def test_readyz_returns_ok_when_dependencies_are_reachable(monkeypatch) -> None:
-    seen_urls: list[str] = []
+    seen_requests: list[dict[str, object]] = []
 
-    def mock_get(url: str, timeout: float) -> MockResponse:
-        seen_urls.append(url)
+    def mock_get(url: str, **kwargs) -> MockResponse:
+        seen_requests.append({"url": url, "params": kwargs.get("params")})
         return MockResponse()
 
     monkeypatch.setattr(server.httpx, "get", mock_get)
@@ -50,14 +50,17 @@ def test_readyz_returns_ok_when_dependencies_are_reachable(monkeypatch) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
-    assert seen_urls == [
-        "http://zoekt-web:6070/",
-        "http://chromadb:8000/api/v2/heartbeat",
+    assert seen_requests == [
+        {
+            "url": "http://zoekt-web:6070/search",
+            "params": {"q": "TODO", "num": "1", "format": "json"},
+        },
+        {"url": "http://chromadb:8000/api/v2/heartbeat", "params": None},
     ]
 
 
 def test_readyz_fails_clearly_when_zoekt_is_unavailable(monkeypatch) -> None:
-    def mock_get(url: str, timeout: float) -> MockResponse:
+    def mock_get(url: str, **kwargs) -> MockResponse:
         if "zoekt-web" in url:
             raise httpx.ConnectError("connection refused")
         return MockResponse()
@@ -82,7 +85,7 @@ def test_readyz_fails_clearly_when_zoekt_is_unavailable(monkeypatch) -> None:
 
 
 def test_readyz_fails_clearly_when_chromadb_is_unavailable(monkeypatch) -> None:
-    def mock_get(url: str, timeout: float) -> MockResponse:
+    def mock_get(url: str, **kwargs) -> MockResponse:
         if "api/v2/heartbeat" in url:
             return MockResponse(status_code=503, text="not available")
         return MockResponse()

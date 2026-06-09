@@ -85,5 +85,9 @@ class Config:
         return c
 
     @property
+    def zoekt_search_url(self) -> str:
+        return f"{self.zoekt_url.rstrip('/')}/search"
+
+    @property
     def chroma_heartbeat_url(self) -> str:
         return f"http://{self.chroma_host}:{self.chroma_port}/api/v2/heartbeat"

@@ -26,16 +26,24 @@ CFG = Config.load()
 mcp = FastMCP("grepsense")
 
 
-def _reachable(url: str, timeout: float = 3.0) -> bool:
+def _reachable(
+    url: str,
+    timeout: float = 3.0,
+    params: dict[str, str] | None = None,
+) -> bool:
     try:
-        return httpx.get(url, timeout=timeout).is_success
+        return httpx.get(url, params=params, timeout=timeout).is_success
     except Exception:
         return False
 
 
-def _dependency_status(name: str, url: str) -> dict:
+def _dependency_status(
+    name: str,
+    url: str,
+    params: dict[str, str] | None = None,
+) -> dict:
     try:
-        resp = httpx.get(url, timeout=3.0)
+        resp = httpx.get(url, params=params, timeout=3.0)
     except Exception as err:
         return {"name": name, "ok": False, "url": url, "error": str(err)}
 
@@ -50,15 +58,19 @@ def _dependency_status(name: str, url: str) -> dict:
     return status
 
 
-@mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
+@mcp.custom_route("/healthz", methods=["GET", "HEAD"], include_in_schema=False)
 async def healthz(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-@mcp.custom_route("/readyz", methods=["GET"], include_in_schema=False)
+@mcp.custom_route("/readyz", methods=["GET", "HEAD"], include_in_schema=False)
 async def readyz(request: Request) -> JSONResponse:
     dependencies = [
-        _dependency_status("zoekt", f"{CFG.zoekt_url}/"),
+        _dependency_status(
+            "zoekt",
+            CFG.zoekt_search_url,
+            params={"q": "TODO", "num": "1", "format": "json"},
+        ),
         _dependency_status("chromadb", CFG.chroma_heartbeat_url),
     ]
     ready = all(dep["ok"] for dep in dependencies)
@@ -83,7 +95,10 @@ def code_search(
     ] = 20,
 ) -> str:
     """Search source code using a trigram index (Zoekt). Supports literal strings, regex, and filters like repo:, file:, lang:, case:yes. Fast sub-10ms across all indexed repos."""
-    if not _reachable(f"{CFG.zoekt_url}/"):
+    if not _reachable(
+        CFG.zoekt_search_url,
+        params={"q": "TODO", "num": "1", "format": "json"},
+    ):
         raise RuntimeError(
             f"Zoekt is not reachable at {CFG.zoekt_url}. Is the grepsense stack up? "
             "(docker compose up -d)"
@@ -91,7 +106,7 @@ def code_search(
 
     try:
         resp = httpx.get(
-            f"{CFG.zoekt_url}/search",
+            CFG.zoekt_search_url,
             params={"q": query, "num": max_results, "format": "json"},
             timeout=30.0,
         )
