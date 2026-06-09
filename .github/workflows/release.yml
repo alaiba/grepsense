@@ -42,7 +42,7 @@ jobs:
           echo "${{ steps.build.outputs.digest }}" > "/tmp/digests/${{ matrix.image }}-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          name: digest-${{ matrix.image }}__${{ matrix.arch }}
           path: /tmp/digests/*.txt
           retention-days: 1
 
@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: digest-${{ matrix.image }}-*
+          pattern: digest-${{ matrix.image }}__*
           path: /tmp/digests
           merge-multiple: true
       - uses: docker/setup-buildx-action@v3
