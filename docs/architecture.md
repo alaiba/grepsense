@@ -24,8 +24,8 @@ grepsense has two search layers behind one MCP server.
 
 Google's open-source trigram engine (the core of Sourcegraph). A small Go binary
 builds a compact index (~⅓ of source) and serves regex/literal queries with a
-JSON API. We build it from a pinned commit with one local patch (`-ignore_file`,
-for a shared ignore list) — see `zoekt/`.
+JSON API. We build it from a pinned upstream commit (no patches) — see `zoekt/`.
+Indexing honors each repo's `.gitignore`.
 
 ## Layer 2 — ChromaDB + embeddings (semantic)
 

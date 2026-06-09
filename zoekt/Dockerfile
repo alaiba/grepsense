@@ -2,7 +2,7 @@ FROM golang:1.25-alpine AS build
 
 RUN apk add --no-cache git
 
-# Pin Zoekt to a known commit for reproducible patch application.
+# Pin Zoekt to a known commit for reproducible builds.
 ARG ZOEKT_COMMIT=071adfde901e3e10992ec5afc11f54984ab7e7fc
 ARG ZOEKT_REPO=https://github.com/sourcegraph/zoekt.git
 
@@ -12,12 +12,7 @@ RUN git clone --depth=1 "$ZOEKT_REPO" zoekt \
   && git fetch --depth=1 origin "$ZOEKT_COMMIT" \
   && git checkout "$ZOEKT_COMMIT"
 
-# Apply local patches.
-COPY patches/ /patches/
-RUN chmod +x /patches/apply-patches.sh /patches/*.sh \
-  && sh /patches/apply-patches.sh /src/zoekt
-
-# Build patched binaries.
+# Build the binaries (stock upstream — no patches).
 RUN cd /src/zoekt \
   && go build -o /go/bin/zoekt-git-index ./cmd/zoekt-git-index \
   && go build -o /go/bin/zoekt-index ./cmd/zoekt-index \

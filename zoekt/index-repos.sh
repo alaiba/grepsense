@@ -4,6 +4,8 @@
 #
 # GREPSENSE_ROOT (default /code) is either a single git repo or a directory that
 # contains git repos. Discovery is bash-native so this image needs no Python.
+# Git repos are indexed at HEAD honoring their .gitignore; non-git trees use a
+# directory ignore list.
 #
 # Usage:
 #   ./index-repos.sh                 # discover + index everything under GREPSENSE_ROOT
@@ -13,8 +15,6 @@ set -euo pipefail
 ROOT="${GREPSENSE_ROOT:-/code}"
 INDEX_DIR="${ZOEKT_INDEX_DIR:-/data/index}"
 FILE_LIMIT="${ZOEKT_FILE_LIMIT:-1048576}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IGNORE_FILE="${ZOEKT_IGNORE_FILE:-$SCRIPT_DIR/zoekt-ignore}"
 ZOEKT_GIT_INDEX="${ZOEKT_GIT_INDEX:-zoekt-git-index}"
 ZOEKT_INDEX="${ZOEKT_INDEX:-zoekt-index}"
 
@@ -41,14 +41,13 @@ index_one() {
   local repo_path="$1"
   echo "INDEX: $repo_path"
   if [ -d "$repo_path/.git" ]; then
-    local ignore=()
-    [ -f "$IGNORE_FILE" ] && ignore=(-ignore_file "$IGNORE_FILE")
+    # zoekt-git-index honors the repo's .gitignore (and any committed
+    # .sourcegraph/ignore) automatically.
     "$ZOEKT_GIT_INDEX" \
       -index "$INDEX_DIR" \
       -file_limit "$FILE_LIMIT" \
       -branches HEAD \
       -incremental \
-      "${ignore[@]}" \
       "$repo_path" || echo "  WARN: indexing $repo_path had errors (continuing)"
   else
     "$ZOEKT_INDEX" \

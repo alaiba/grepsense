@@ -19,7 +19,7 @@ jobs:
         include:
           - image: grepsense          # the Python image (embedder + MCP server)
             context: .
-          - image: grepsense-zoekt     # the patched Zoekt engine
+          - image: grepsense-zoekt     # the Zoekt engine
             context: ./zoekt
     steps:
       - uses: actions/checkout@v4
