@@ -1,7 +1,8 @@
 name: Release
 
-# Tag a release (e.g. v0.1.0) to build + publish images to GHCR and the package
-# to PyPI.
+# Tag a release (e.g. v0.1.0) to build + publish multi-arch images to GHCR.
+# Each (image, arch) builds on a native runner and is pushed by digest; a merge
+# job then assembles the tagged multi-arch manifest (amd64 + arm64).
 on:
   push:
     tags: ["v*"]
@@ -9,20 +10,54 @@ on:
 permissions:
   contents: read
   packages: write
-  id-token: write   # for PyPI trusted publishing
 
 jobs:
-  images:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: grepsense,       context: .,       platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
+          - { image: grepsense,       context: .,       platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
+          - { image: grepsense-zoekt, context: ./zoekt, platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
+          - { image: grepsense-zoekt, context: ./zoekt, platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          echo "${{ steps.build.outputs.digest }}" > "/tmp/digests/${{ matrix.image }}-${{ matrix.arch }}.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: /tmp/digests/*.txt
+          retention-days: 1
+
+  merge:
+    needs: build
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        include:
-          - image: grepsense          # the Python image (embedder + MCP server)
-            context: .
-          - image: grepsense-zoekt     # the Zoekt engine
-            context: ./zoekt
+        image: [grepsense, grepsense-zoekt]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          path: /tmp/digests
+          merge-multiple: true
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -36,24 +71,12 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest
-      - uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          # The grepsense image bundles torch + the model and is large; arm64 can
-          # be added here (platforms: linux/amd64,linux/arm64) at the cost of build time.
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Create + push multi-arch manifest
+        run: |
+          tags=$(jq -r '.tags[] | "-t " + .' <<< "$DOCKER_METADATA_OUTPUT_JSON" | tr '\n' ' ')
+          digests=$(cat /tmp/digests/*.txt | sed "s|^|ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@|" | tr '\n' ' ')
+          docker buildx imagetools create $tags $digests
+      - run: docker buildx imagetools inspect "ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}"
 
-  pypi:
-    runs-on: ubuntu-latest
-    # Requires a PyPI "trusted publisher" configured for this repo.
-    environment: pypi
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install build && python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+# PyPI publishing is intentionally deferred until a PyPI trusted publisher is
+# configured for this repo. Add a job using pypa/gh-action-pypi-publish then.
