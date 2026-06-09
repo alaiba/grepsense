@@ -43,6 +43,11 @@ The same running stack can serve many clients — run it on a shared host and po
 everyone's agent at it. The MCP server only needs to reach Zoekt + ChromaDB; only
 the indexer/embedder mount your source.
 
+MCP exposes lightweight HTTP health probes on the same port:
+
+- `GET /healthz` returns 200 when the MCP process is alive.
+- `GET /readyz` returns 200 only when MCP can reach Zoekt and ChromaDB.
+
 ## Alternative: native install (no Docker)
 
 ```bash

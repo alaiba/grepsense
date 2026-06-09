@@ -1,0 +1,286 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grepsense.fullname" . }}-chromadb
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chromadb
+spec:
+  replicas: {{ .Values.chromadb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "grepsense.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: chromadb
+  template:
+    metadata:
+      labels:
+        {{- include "grepsense.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: chromadb
+    spec:
+      containers:
+        - name: chromadb
+          image: {{ .Values.images.chromadb | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: IS_PERSISTENT
+              value: "TRUE"
+            - name: ANONYMIZED_TELEMETRY
+              value: "FALSE"
+          ports:
+            - name: http
+              containerPort: 8000
+          {{- if and .Values.probes.enabled .Values.chromadb.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /api/v2/heartbeat
+              port: http
+            {{- toYaml .Values.chromadb.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/v2/heartbeat
+              port: http
+            {{- toYaml .Values.chromadb.probes.readiness | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /chroma/chroma
+      volumes:
+        - name: chroma-data
+          {{- if .Values.chromadb.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "grepsense.fullname" . }}-chroma-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grepsense.fullname" . }}-zoekt-web
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+    app.kubernetes.io/component: zoekt-web
+spec:
+  replicas: {{ .Values.zoektWeb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "grepsense.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: zoekt-web
+  template:
+    metadata:
+      labels:
+        {{- include "grepsense.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: zoekt-web
+    spec:
+      containers:
+        - name: zoekt-web
+          image: {{ .Values.images.zoekt | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - exec zoekt-webserver -index /data/index -listen ":6070"
+          ports:
+            - name: http
+              containerPort: 6070
+          {{- if and .Values.probes.enabled .Values.zoektWeb.probes.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            {{- toYaml .Values.zoektWeb.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /search?q=TODO&num=1&format=json
+              port: http
+            {{- toYaml .Values.zoektWeb.probes.readiness | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: zoekt-index
+              mountPath: /data/index
+              readOnly: true
+      volumes:
+        - name: zoekt-index
+          {{- if .Values.zoekt.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "grepsense.fullname" . }}-zoekt-index
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grepsense.fullname" . }}-mcp
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: {{ .Values.mcp.replicas }}
+  selector:
+    matchLabels:
+      {{- include "grepsense.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp
+  template:
+    metadata:
+      labels:
+        {{- include "grepsense.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp
+    spec:
+      containers:
+        - name: mcp
+          image: {{ .Values.images.grepsense | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: ["serve", "--transport", "http", "--host", "0.0.0.0", "--port", "8765"]
+          env:
+            - name: ZOEKT_URL
+              value: http://{{ include "grepsense.fullname" . }}-zoekt-web:{{ .Values.zoektWeb.service.port }}
+            - name: CHROMADB_HOST
+              value: {{ include "grepsense.fullname" . }}-chromadb
+            - name: CHROMADB_PORT
+              value: {{ .Values.chromadb.service.port | quote }}
+            - name: GREPSENSE_COLLECTION
+              value: {{ .Values.grepsense.collection | quote }}
+          ports:
+            - name: http
+              containerPort: 8765
+          {{- if and .Values.probes.enabled .Values.mcp.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            {{- toYaml .Values.mcp.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            {{- toYaml .Values.mcp.probes.readiness | nindent 12 }}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grepsense.fullname" . }}-zoekt-indexer
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+    app.kubernetes.io/component: zoekt-indexer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "grepsense.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: zoekt-indexer
+  template:
+    metadata:
+      labels:
+        {{- include "grepsense.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: zoekt-indexer
+    spec:
+      containers:
+        - name: zoekt-indexer
+          image: {{ .Values.images.zoekt | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              bash /opt/grepsense/zoekt/index-repos.sh
+              while true; do
+                sleep "${REINDEX_INTERVAL:-300}"
+                bash /opt/grepsense/zoekt/index-repos.sh
+              done
+          env:
+            - name: GREPSENSE_ROOT
+              value: /code
+            - name: ZOEKT_INDEX_DIR
+              value: /data/index
+            - name: REINDEX_INTERVAL
+              value: {{ .Values.zoektIndexer.reindexInterval | quote }}
+          {{- if and .Values.probes.enabled .Values.zoektIndexer.probes.enabled }}
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "test -d /proc/1"]
+            {{- toYaml .Values.zoektIndexer.probes.liveness | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: zoekt-index
+              mountPath: /data/index
+            - name: source
+              mountPath: /code
+              readOnly: true
+            - name: zoekt-indexer-script
+              mountPath: /opt/grepsense/zoekt
+              readOnly: true
+      volumes:
+        - name: zoekt-index
+          {{- if .Values.zoekt.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "grepsense.fullname" . }}-zoekt-index
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: source
+          {{- toYaml .Values.source.volume | nindent 10 }}
+        - name: zoekt-indexer-script
+          configMap:
+            name: {{ include "grepsense.fullname" . }}-zoekt-indexer
+            defaultMode: 0755
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "grepsense.fullname" . }}-embedder
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+    app.kubernetes.io/component: embedder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "grepsense.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: embedder
+  template:
+    metadata:
+      labels:
+        {{- include "grepsense.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: embedder
+    spec:
+      containers:
+        - name: embedder
+          image: {{ .Values.images.grepsense | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until curl -sf "http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null; do
+                echo "grepsense: waiting for chromadb..."
+                sleep 2
+              done
+              grepsense embed --root /code || true
+              while true; do
+                sleep "${EMBED_INTERVAL:-3600}"
+                grepsense embed --root /code || true
+              done
+          env:
+            - name: GREPSENSE_ROOT
+              value: /code
+            - name: CHROMADB_HOST
+              value: {{ include "grepsense.fullname" . }}-chromadb
+            - name: CHROMADB_PORT
+              value: {{ .Values.chromadb.service.port | quote }}
+            - name: GREPSENSE_COLLECTION
+              value: {{ .Values.grepsense.collection | quote }}
+            - name: GREPSENSE_EMBEDDING_MODEL
+              value: {{ .Values.grepsense.embeddingModel | quote }}
+            - name: EMBED_INTERVAL
+              value: {{ .Values.embedder.embedInterval | quote }}
+          {{- if and .Values.probes.enabled .Values.embedder.probes.enabled }}
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "test -d /proc/1"]
+            {{- toYaml .Values.embedder.probes.liveness | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: source
+              mountPath: /code
+              readOnly: true
+      volumes:
+        - name: source
+          {{- toYaml .Values.source.volume | nindent 10 }}

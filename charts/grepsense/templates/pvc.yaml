@@ -1,0 +1,35 @@
+{{- if .Values.zoekt.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "grepsense.fullname" . }}-zoekt-index
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.zoekt.persistence.size }}
+  {{- if .Values.zoekt.persistence.storageClassName }}
+  storageClassName: {{ .Values.zoekt.persistence.storageClassName | quote }}
+  {{- end }}
+---
+{{- end }}
+{{- if .Values.chromadb.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "grepsense.fullname" . }}-chroma-data
+  labels:
+    {{- include "grepsense.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.chromadb.persistence.size }}
+  {{- if .Values.chromadb.persistence.storageClassName }}
+  storageClassName: {{ .Values.chromadb.persistence.storageClassName | quote }}
+  {{- end }}
+{{- end }}

@@ -16,6 +16,8 @@ from typing import Annotated, Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from . import semantic
 from .config import Config
@@ -29,6 +31,42 @@ def _reachable(url: str, timeout: float = 3.0) -> bool:
         return httpx.get(url, timeout=timeout).is_success
     except Exception:
         return False
+
+
+def _dependency_status(name: str, url: str) -> dict:
+    try:
+        resp = httpx.get(url, timeout=3.0)
+    except Exception as err:
+        return {"name": name, "ok": False, "url": url, "error": str(err)}
+
+    status: dict = {
+        "name": name,
+        "ok": resp.is_success,
+        "url": url,
+        "status_code": resp.status_code,
+    }
+    if not resp.is_success:
+        status["error"] = resp.text[:500]
+    return status
+
+
+@mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
+async def healthz(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+@mcp.custom_route("/readyz", methods=["GET"], include_in_schema=False)
+async def readyz(request: Request) -> JSONResponse:
+    dependencies = [
+        _dependency_status("zoekt", f"{CFG.zoekt_url}/"),
+        _dependency_status("chromadb", CFG.chroma_heartbeat_url),
+    ]
+    ready = all(dep["ok"] for dep in dependencies)
+    status_code = 200 if ready else 503
+    return JSONResponse(
+        {"status": "ready" if ready else "not_ready", "dependencies": dependencies},
+        status_code=status_code,
+    )
 
 
 @mcp.tool()

@@ -32,7 +32,14 @@ Check progress with `docker compose logs -f embedder zoekt-indexer`.
 ```bash
 curl -s localhost:6070/search?q=TODO\&num=1\&format=json | head -c 200   # Zoekt
 curl -s localhost:8000/api/v2/heartbeat                                  # ChromaDB
+curl -s localhost:${GREPSENSE_HTTP_PORT:-8765}/healthz                   # MCP process
+curl -s localhost:${GREPSENSE_HTTP_PORT:-8765}/readyz                    # MCP dependencies
 ```
+
+`/healthz` is intentionally shallow: it returns 200 when the MCP HTTP process is
+alive and does not check backends. `/readyz` returns 200 only when MCP can reach
+Zoekt via `ZOEKT_URL` and ChromaDB via `CHROMADB_HOST` / `CHROMADB_PORT`; when a
+dependency is down it returns a non-200 response with JSON dependency details.
 
 ### Register with your agent (HTTP — works for all agents)
 
@@ -81,6 +88,23 @@ claude mcp add grepsense -- grepsense serve        # stdio registration
   `.env` files / `-p` project names).
 - **Tear down (keep data):** `docker compose down`. **Wipe data too:**
   `docker compose down -v`.
+
+## Kubernetes / Helm
+
+The initial Helm chart lives in `charts/grepsense`. Probes are enabled by default
+with `probes.enabled=true` and can be overridden per component with
+`mcp.probes`, `chromadb.probes`, `zoektWeb.probes`, `zoektIndexer.probes`, and
+`embedder.probes`.
+
+MCP readiness uses `/readyz` and therefore depends on Zoekt and ChromaDB being
+reachable. MCP liveness uses `/healthz`. ChromaDB uses `/api/v2/heartbeat` for
+both readiness and liveness. Zoekt web uses a search readiness check and a TCP
+liveness check on port 6070.
+
+`zoekt-indexer` and `embedder` are looping background workers rather than HTTP
+services, so the chart starts with conservative liveness checks only. It does
+not add strict readiness probes for them until there is a reliable worker status
+file or equivalent signal.
 
 ## Troubleshooting
 

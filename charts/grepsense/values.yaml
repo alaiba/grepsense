@@ -1,0 +1,84 @@
+imagePullPolicy: IfNotPresent
+
+images:
+  grepsense: ghcr.io/alaiba/grepsense:latest
+  zoekt: ghcr.io/alaiba/grepsense-zoekt:latest
+  chromadb: chromadb/chroma:latest
+
+probes:
+  enabled: true
+
+mcp:
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8765
+  probes:
+    enabled: true
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+chromadb:
+  replicas: 1
+  service:
+    port: 8000
+  probes:
+    enabled: true
+    liveness:
+      initialDelaySeconds: 20
+      periodSeconds: 30
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+
+zoektWeb:
+  replicas: 1
+  service:
+    port: 6070
+  probes:
+    enabled: true
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+zoektIndexer:
+  reindexInterval: 300
+  probes:
+    enabled: true
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds: 60
+
+embedder:
+  embedInterval: 3600
+  probes:
+    enabled: true
+    liveness:
+      initialDelaySeconds: 60
+      periodSeconds: 60
+
+grepsense:
+  collection: grepsense
+  embeddingModel: all-MiniLM-L6-v2
+
+source:
+  # Override with a persistentVolumeClaim, hostPath, or other volume containing code.
+  volume:
+    emptyDir: {}
+
+zoekt:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: grepsense
+description: Two-modal code search for AI coding agents.
+type: application
+version: 0.1.0
+appVersion: "0.1.1"

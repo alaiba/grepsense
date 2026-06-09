@@ -43,6 +43,11 @@ cold load per call. It exposes `stdio` (local agents) and `streamable-http`
 returning a clear error if a backend is down. Configuration is env-driven
 (`grepsense.config.Config`), optionally overridden by `grepsense.yaml`.
 
+For HTTP deployments, MCP also exposes `GET /healthz` and `GET /readyz`.
+`/healthz` is a process liveness check only. `/readyz` checks dependency
+reachability against `ZOEKT_URL` and ChromaDB's `/api/v2/heartbeat`, returning
+JSON details and a non-200 status when either dependency is unavailable.
+
 ## Repository discovery
 
 `grepsense.discovery` derives targets from the git layout of `GREPSENSE_ROOT`:
@@ -57,6 +62,10 @@ child git repo is indexed. No editor/workspace files required.
   `grepsense-zoekt-index` and `grepsense-chroma-data` volumes.
 - **Native:** `pipx install grepsense` + a reachable Zoekt and ChromaDB; the
   server runs over stdio or HTTP.
+- **Kubernetes / Helm:** the chart deploys the five runtime components with
+  HTTP/TCP probes for MCP, Zoekt web, and ChromaDB. The `zoekt-indexer` and
+  `embedder` workers only have liveness probes initially because they are
+  background loops without a reliable readiness signal.
 
 Both the Zoekt index and the embeddings are fully regenerable from source, so
 losing them only costs re-index time.
