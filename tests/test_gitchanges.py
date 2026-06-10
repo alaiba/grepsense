@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from grepsense.gitchanges import changed_paths, current_head
+from grepsense import gitchanges
 from tests.helpers import git_commit_all, init_git_repo
 
 
@@ -83,3 +85,21 @@ def test_changed_paths_respects_watermark_for_old_commits(tmp_path) -> None:
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     state = {"watermark": future, "head": head}
     assert changed_paths(repo, state) == set()
+
+
+def test_git_commands_mark_explicit_repo_safe(monkeypatch, tmp_path) -> None:
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    repo = tmp_path / "repo"
+    gitchanges._run_git(repo, "rev-parse", "HEAD")
+
+    safe_repo = str(Path(repo).resolve())
+    assert calls == [
+        ["git", "-c", f"safe.directory={safe_repo}", "-C", safe_repo, "rev-parse", "HEAD"]
+    ]

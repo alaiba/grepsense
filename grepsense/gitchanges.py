@@ -8,8 +8,9 @@ from pathlib import Path
 
 
 def _run_git(repo_path: Path, *args: str) -> str:
+    safe_repo = str(repo_path.resolve())
     result = subprocess.run(
-        ["git", "-C", str(repo_path), *args],
+        ["git", "-c", f"safe.directory={safe_repo}", "-C", safe_repo, *args],
         check=True,
         capture_output=True,
         text=True,
