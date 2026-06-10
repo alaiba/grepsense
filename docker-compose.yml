@@ -93,6 +93,7 @@ services:
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
       - GREPSENSE_COLLECTION=${GREPSENSE_COLLECTION:-grepsense}
+      - GREPSENSE_ALLOWED_HOSTS=${GREPSENSE_ALLOWED_HOSTS:-}
     ports:
       - "${GREPSENSE_HTTP_PORT:-8765}:8765"
     depends_on:

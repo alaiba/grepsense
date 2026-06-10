@@ -11,10 +11,12 @@ returns a clear error if a service is unreachable.
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -23,7 +25,29 @@ from . import semantic
 from .config import Config
 
 CFG = Config.load()
-mcp = FastMCP("grepsense")
+
+
+def _transport_security() -> TransportSecuritySettings:
+    """Host/Origin policy for the streamable-HTTP transport.
+
+    grepsense is meant to be reached over the network (it binds 0.0.0.0), so the
+    SDK's default localhost-only DNS-rebinding guard is inappropriate — it would
+    reject legitimate clients such as `host.docker.internal` or a LAN host with a
+    421. Disabled by default; set GREPSENSE_ALLOWED_HOSTS (comma-separated) to
+    re-enable the guard restricted to those hosts.
+    """
+    hosts = os.environ.get("GREPSENSE_ALLOWED_HOSTS", "").strip()
+    if hosts:
+        allowed = [h.strip() for h in hosts.split(",") if h.strip()]
+        return TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=allowed,
+            allowed_origins=allowed,
+        )
+    return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+
+mcp = FastMCP("grepsense", transport_security=_transport_security())
 
 
 def _reachable(
