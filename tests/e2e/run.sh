@@ -5,18 +5,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/grepsense-e2e.XXXXXX")"
 FIXTURE_ROOT="$ROOT/tests/e2e/fixture"
-REPO="$FIXTURE_ROOT/demo-repo"
+REPO="$WORKDIR/demo-repo"
 
-if [ ! -d "$REPO/.git" ]; then
-  git -C "$REPO" init -b main
-  git -C "$REPO" config user.email "e2e@grepsense.test"
-  git -C "$REPO" config user.name "grepsense e2e"
-  git -C "$REPO" add .
-  git -C "$REPO" commit -m "init"
-fi
+cp -R "$FIXTURE_ROOT/demo-repo" "$REPO"
+rm -rf "$REPO/.git"
 
-export GREPSENSE_TARGET="$FIXTURE_ROOT"
+git -C "$REPO" init -b main
+git -C "$REPO" config user.email "e2e@grepsense.test"
+git -C "$REPO" config user.name "grepsense e2e"
+git -C "$REPO" add .
+git -C "$REPO" commit -m "init"
+
+export GREPSENSE_TARGET="$WORKDIR"
 export GREPSENSE_COLLECTION="grepsense-e2e"
 export GREPSENSE_HTTP_PORT="${GREPSENSE_HTTP_PORT:-18765}"
 export CHROMADB_VOLUME="grepsense-e2e-chroma-${RANDOM}"
@@ -25,6 +27,7 @@ export COMPOSE_PROJECT_NAME="grepsense-e2e-${RANDOM}"
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
 
@@ -52,7 +55,7 @@ fi
 echo "=== grepsense e2e: waiting for baseline embed ==="
 baseline=0
 for _ in $(seq 1 120); do
-  if docker compose exec -T embedder grepsense status --root /code 2>/dev/null | grep -q baseline; then
+  if docker compose exec -T embedder sh -lc 'grepsense status --root /code' 2>/dev/null | grep -q baseline; then
     baseline=1
     break
   fi
@@ -91,8 +94,8 @@ echo "# e2e touch" >> "$REPO/hello.py"
 git -C "$REPO" add hello.py
 git -C "$REPO" commit -m "e2e incremental"
 
-docker compose exec -T embedder grepsense embed --root /code
-status="$(docker compose exec -T embedder grepsense status --root /code)"
+docker compose exec -T embedder sh -lc 'grepsense embed --root /code'
+status="$(docker compose exec -T embedder sh -lc 'grepsense status --root /code')"
 echo "$status"
 echo "$status" | grep -q incremental
 
