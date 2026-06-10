@@ -1,7 +1,8 @@
 """grepsense command-line entry point.
 
     grepsense serve [--transport stdio|http] [--host H] [--port P]
-    grepsense embed [--root PATH] [--repo NAME] [--reset]
+    grepsense embed [--root PATH] [--repo NAME] [--reset] [--full]
+    grepsense status [--root PATH]
     grepsense version
 """
 
@@ -35,7 +36,15 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("embed", help="Build/refresh semantic embeddings")
     e.add_argument("--root", help="Root to index (overrides GREPSENSE_ROOT)")
     e.add_argument("--repo", help="Limit to a single repo by name")
-    e.add_argument("--reset", action="store_true", help="Wipe the collection first")
+    e.add_argument("--reset", action="store_true", help="Wipe collections and re-baseline")
+    e.add_argument(
+        "--full",
+        action="store_true",
+        help="Full embed all repos (ignore incremental state)",
+    )
+
+    st = sub.add_parser("status", help="Show per-repo embed state")
+    st.add_argument("--root", help="Root to inspect (overrides GREPSENSE_ROOT)")
 
     sub.add_parser("version", help="Print the grepsense version")
 
@@ -55,15 +64,30 @@ def main(argv: list[str] | None = None) -> int:
         if args.root:
             os.environ["GREPSENSE_ROOT"] = args.root
         from .config import Config
-        from . import chunker
+        from . import incremental
 
         cfg = Config.load()
-        result = chunker.embed(cfg, repo_filter=args.repo, reset=args.reset)
+        result = incremental.run_once(
+            cfg,
+            repo_filter=args.repo,
+            reset=args.reset,
+            incremental=not args.full,
+        )
         print(
             f"grepsense: embedded {result['chunks']} chunks from {result['files']} "
             f"files across {len(result['repos'])} repo(s); collection "
             f"'{cfg.collection}' now has {result['collection_count']} vectors"
         )
+        return 0
+
+    if args.command == "status":
+        if args.root:
+            os.environ["GREPSENSE_ROOT"] = args.root
+        from .config import Config
+        from . import incremental
+
+        cfg = Config.load()
+        print(incremental.format_status(cfg))
         return 0
 
     return 1

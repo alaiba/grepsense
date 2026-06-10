@@ -12,7 +12,15 @@ permissions:
   packages: write
 
 jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run dockerized e2e smoke test
+        run: bash tests/e2e/run.sh
+
   build:
+    needs: e2e
     strategy:
       fail-fast: false
       matrix:

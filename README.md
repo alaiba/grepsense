@@ -53,7 +53,10 @@ MCP exposes lightweight HTTP health probes on the same port:
 ```bash
 pipx install grepsense
 cd /path/to/your/project
-grepsense embed                      # build semantic embeddings (needs a running ChromaDB)
+grepsense embed                      # incremental embed (needs a running ChromaDB)
+grepsense embed --full               # force full re-embed of all repos
+grepsense embed --reset              # wipe collections and re-baseline
+grepsense status                     # per-repo embed state and collection size
 grepsense serve --transport http     # or stdio
 claude mcp add grepsense -- grepsense serve   # stdio registration
 ```

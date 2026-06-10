@@ -31,8 +31,22 @@ Indexing honors each repo's `.gitignore`.
 
 Source files are chunked by line boundaries (1500 chars, 200 overlap), embedded
 with a local model (`all-MiniLM-L6-v2`, no API key), and stored in ChromaDB with
-cosine similarity. The embedder (`grepsense embed`) discovers repos, walks them
-(honoring include/exclude globs), and upserts chunks keyed by a content hash.
+cosine similarity. Chunk IDs are positional hashes
+(`repo:path:start:end:index`); changed files are delete-then-re-embed so stale
+vectors do not linger.
+
+The embedder runs `grepsense embed` incrementally by default:
+
+- **Baseline** — first pass per repo (no state record) embeds the full tree.
+- **Incremental (git repos)** — git diff since the last watermark/HEAD; delete
+  chunks for changed paths, re-embed files that still exist.
+- **Fallback (non-git)** — full walk with ID-skip for trees without `.git`.
+
+Per-repo watermarks and HEAD live in a separate Chroma collection
+(`grepsense_state`). A same-host file lock (`flock`) prevents the compose loop
+and a manual `grepsense embed` from running concurrently. Use `grepsense status`
+for per-repo last-run summaries; `grepsense embed --reset` wipes both collections
+and re-baselines; `grepsense embed --full` ignores state and re-embeds everything.
 
 ## Layer 3 — MCP server
 

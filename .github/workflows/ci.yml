@@ -13,10 +13,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # Smoke test without the heavy ML deps: the CLI's `version` path imports
-      # only the package itself; server/embedder deps are imported lazily.
-      - run: pip install --no-deps .
+      - run: pip install .[test]
       - run: grepsense version
+      - run: pytest
+        # gitchanges tests shell out to git (pre-installed on ubuntu-latest).
       - run: python -m compileall grepsense
 
   compose:

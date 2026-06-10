@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grepsense"
-version = "0.1.2"
+version = "0.2.0"
 description = "Two-modal code search (lexical + semantic) for AI coding agents, over MCP."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "pytest>=8",
+    "chromadb>=1.0",
 ]
 
 [project.urls]
@@ -44,3 +45,6 @@ grepsense = "grepsense.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["grepsense"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
